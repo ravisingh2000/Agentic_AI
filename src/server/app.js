@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require("cors");
 const v1Routes = require("../v1/routes")
-
 const app = express();
 
 
@@ -17,6 +16,9 @@ const corsOptions = {
     "credentials": true,
 }
 app.use(cors(corsOptions));
+
+
+
 app.get('/', (req, res) => {
     res.json({ message: 'main route' })
 });

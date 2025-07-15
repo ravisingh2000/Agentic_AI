@@ -1,10 +1,10 @@
 const mongoose = require("mongoose");
 const accountSchema = new mongoose.Schema(
     {
-        user: {
-            type: mongoose.Schema.ObjectId,
-            ref: 'user'
-        },
+        // user: {
+        //     type: mongoose.Schema.ObjectId,
+        //     ref: 'user'
+        // },
         type: {
             type: String,
             enum: ['GMAIL'],

@@ -10,7 +10,7 @@ const oauthAccountLogin = async (req, res) => {
 
 const authorization = async (req, res) => {
     try {
-        let result = await EmailService.getAutorization(req.body)
+        let result = await EmailService.authorization(req.query.code)
         res.status(200).json({
             message: "account authorized successfully",
         });
@@ -19,6 +19,22 @@ const authorization = async (req, res) => {
     }
 
 }
+// const page = parseInt(req.query.page) || 1;
+// const limit = parseInt(req.query.limit) || 10;
+
+// const accounts = await Account.find()
+//     .skip((page - 1) * limit)
+//     .limit(limit)
+//     .sort({ createdAt: -1 });
+
+// const total = await Account.countDocuments();
+
+// res.json({
+//     accounts,
+//     total,
+//     page,
+//     totalPages: Math.ceil(total / limit),
+// });
 
 module.exports = {
     oauthAccountLogin,

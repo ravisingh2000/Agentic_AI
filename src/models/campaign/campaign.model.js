@@ -11,7 +11,7 @@ const CampaignSchema = new mongoose.Schema({
         required: true
     },
     companyUrl: {
-        type: Date,
+        type: String,
         required: true
     },
     documents: [{
@@ -20,6 +20,11 @@ const CampaignSchema = new mongoose.Schema({
     }],
     summary: {
         type: String
+    },
+    senderAccount: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "account",
+        required: true,
     },
     status: {
         type: String,

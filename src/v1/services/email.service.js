@@ -1,23 +1,28 @@
 
 const axios = require("axios")
-const Accounts = require("../../models/accounts/account.model")
-
+const Account = require("../../models/accounts/account.model")
+const Campaign = require("../../models/campaign/campaign.model")
+const Lead = require("../../models/leads/leads.model")
 
 const setAccount = async (data) => {
     console.log(data)
     let userProfile = await getGoogleUserProfile(data.access_token)
-    let account = await Accounts.findOne({
+    let account = await Account.findOne({
         type: 'GMAIL',
         config: { access_token: data.access_token }
 
     });
+    const new_account = await Account.create({
+        type: 'GMAIL',
 
-    account.type = 'GMAIL';
-    account.email = userProfile.email;
-    account.access_token = data.access_token;
-    account.refresh_token = data.refresh_token;
-    account.active = true;
-    const new_account = await account.save();
+        email: userProfile.email,
+        config: {
+            access_token: data.access_token,
+            refresh_token: data.refresh_token
+        },
+        active: true
+    }).lean();
+
     return new_account
 }
 const getAccount = async (accountId) => {
@@ -41,12 +46,27 @@ const getGoogleUserProfile = async (accessToken) => {
     }
 }
 const getLoginLink = async () => {
-    return 'https://accounts.google.com/o/oauth2/v2/auth/oauthchooseaccount?access_type=offline&scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fgmail.compose&response_type=code&client_id=' + process.env.GOOGLE_CLIENT_ID + '&redirect_uri=' + process.env.GOOGLE_REDIRECT + '&flowName=GeneralOAuthFlow&prompt=consent'
+    const authUrl =
+        'https://accounts.google.com/o/oauth2/v2/auth' +
+        '?access_type=offline' +
+        '&response_type=code' +
+        `&client_id=${process.env.GOOGLE_CLIENT_ID}` +
+        `&redirect_uri=${process.env.GOOGLE_REDIRECT}` +
+        '&prompt=consent' +
+        '&scope=' + encodeURIComponent([
+
+            'https://www.googleapis.com/auth/gmail.send',
+            'https://www.googleapis.com/auth/userinfo.email',
+            'https://www.googleapis.com/auth/userinfo.profile',
+            'openid'
+        ].join(' '));
+
+    return authUrl
 }
 const authorization = async (code) => {
-    const authCode = code.authcode;
+    const authCode = code;
     const tokenUrl = 'https://accounts.google.com/o/oauth2/token';
-    const redirectUri = process.env.GOOGLE_REDIRECT || 'http://127.0.0.1:3000/v1/integration/getAuthorization/Gmail';
+    const redirectUri = process.env.GOOGLE_REDIRECT || 'https://8c49aa241c23.ngrok-free.app/v1/account/authorization/Gmail';
 
     const basicAuth = Buffer.from(
         `${process.env.GOOGLE_CLIENT_ID}:${process.env.GOOGLE_CLIENT_SECRET}`
@@ -80,144 +100,109 @@ const authorization = async (code) => {
         // throw new Error('Failed to authorize with Google');
     }
 }
-const refreshAccessToken = async ({ accountId, access_token, refresh_token }) => {
+const refreshAccessToken = async ({ accountId, refresh_token }) => {
 
     const tokenUrl = 'https://accounts.google.com/o/oauth2/token';
-    const formParams = new URLSearchParams({
-        grant_type: 'refresh_token',
-        client_id: process.env.GOOGLE_CLIENT_ID,
-        client_secret: process.env.GOOGLE_CLIENT_SECRET,
-        refresh_token: refresh_token,
-    });
 
-    const response = await request.postAsync({
-        method: 'POST',
-        uri: `${tokenUrl}?${formParams.toString()}`,
+    const formParams = new URLSearchParams();
+    formParams.append('grant_type', 'refresh_token');
+    formParams.append('client_id', process.env.GOOGLE_CLIENT_ID);
+    formParams.append('client_secret', process.env.GOOGLE_CLIENT_SECRET);
+    formParams.append('refresh_token', refresh_token);
+
+    const response = await axios.post(tokenUrl, formParams.toString(), {
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
         }
     });
 
-    const tokenResponse = JSON.parse(response.body);
+    const tokenResponse = response.data;
     console.log('Refreshed token response:', tokenResponse);
 
 
-    const account = await Accounts.findOne({
-        company: companyId,
-        type: 'GMAIL',
-        access_token: access_token,
-    });
+    const account = await Account.findById(accountId);
 
     if (account && tokenResponse.access_token) {
 
-        account.access_token = tokenResponse.access_token;
-        account.refresh_token = tokenResponse.refresh_token || account.refresh_token;
+        account.config.access_token = tokenResponse.access_token;
 
         await account.save();
     }
 
-    return;
+    return tokenResponse.access_token;
 }
 
-const sendMail = async ({ to, from, subject, text, html, replyTo, accessToken }) => {
-    try {
-        const rawMessage = [
-            `To: ${to}`,
-            `From: ${from}`,
-            `Subject: ${subject}`,
-            replyTo ? `Reply-To: ${replyTo}` : '',
-            `Content-Type: multipart/alternative; boundary="boundary-example"`,
-            ``,
-            `--boundary-example`,
-            `Content-Type: text/plain; charset="UTF-8"`,
-            ``,
-            `${text || ''}`,
-            `--boundary-example`,
-            `Content-Type: text/html; charset="UTF-8"`,
-            ``,
-            `${html || ''}`,
-            `--boundary-example--`,
-        ]
-            .filter(Boolean) // remove empty lines
-            .join('\n')
-            .trim();
-
-        const encodedMessage = Buffer.from(rawMessage)
-            .toString('base64')
-            .replace(/\+/g, '-')
-            .replace(/\//g, '_')
-            .replace(/=+$/, ''); // URL-safe base64
-
-        const response = await axios.post(
-            'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
-            { raw: encodedMessage },
-            {
-                headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json',
-                },
-            }
-        );
-
-        return response.data;
-    } catch (error) {
-        console.error('Failed to send email:', error.response?.data || error.message);
-        // throw new Error('Email sending failed');
-    }
-}
-
-const replyToMessage = async ({ to, from, subject, text, html, accessToken, threadId, messageId }) => {
+// const sendMail = async ({
+//     to, from, subject, text, html, replyTo,
+//     accessToken, threadId, messageId, references
+// }) => {
+const sendMail = async (state) => {
+    const { lead, campaignId, stage, sendEmail, initialEmail } = state;
+    const replyTo = null;
+    const messageId = null;
+    const references = null;
+    const leadData = await Lead.findById(lead.id);
+    const campaignData = await Campaign.findById(campaignId).populate('senderAccount')
+    const subject = stage == 'intial_email_generated' ? initialEmail.subject : sendEmail?.subject
+    const mainBody = stage == 'intial_email_generated' ? initialEmail.body : sendEmail?.body
+    const fresh_access_token = await refreshAccessToken({ accountId: campaignData.senderAccount._id, refresh_token: campaignData.senderAccount.config.refresh_token });
     try {
         const boundary = 'boundary-example';
 
-        const rawMessage = [
-            `To: ${to}`,
-            `From: ${from}`,
-            `Subject: Re: ${subject}`,
-            `In-Reply-To: ${messageId}`,
-            `References: ${messageId}`,
+        const headers = [
+            `To: ${leadData.email}`,
+            `From: ${'ravisingh.11808322@gmail.com'}`,
+            `Subject: ${campaignData.messagethreadId ? `Re: ${subject}` : subject}`,
+            replyTo ? `Reply-To: ${'ravisingh.11808322@gmail.com'}` : '',
+            messageId ? `In-Reply-To: ${messageId}` : '',
+            references ? `References: ${references}` : '',
             `Content-Type: multipart/alternative; boundary="${boundary}"`,
-            ``,
+            '',
+        ].filter(Boolean).join('\n');
+
+        const body = [
             `--${boundary}`,
             `Content-Type: text/plain; charset="UTF-8"`,
-            ``,
-            `${text || ''}`,
-            `--${boundary}`,
-            `Content-Type: text/html; charset="UTF-8"`,
-            ``,
-            `${html || ''}`,
-            `--${boundary}--`,
-        ]
-            .filter(Boolean)
-            .join('\n')
-            .trim();
+            '',
+            mainBody || '',
+
+        ].join('\n');
+
+        const rawMessage = `${headers}\n${body}`;
 
         const encodedMessage = Buffer.from(rawMessage)
             .toString('base64')
             .replace(/\+/g, '-')
             .replace(/\//g, '_')
-            .replace(/=+$/, ''); // base64url encoding
+            .replace(/=+$/, '');
+
+        const payload = { raw: encodedMessage };
+        if (leadData.messagethreadId) payload.threadId = leadData.messagethreadId;
 
         const response = await axios.post(
             'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
-            {
-                raw: encodedMessage,
-                threadId: threadId,
-            },
+            payload,
             {
                 headers: {
-                    Authorization: `Bearer ${accessToken}`,
+                    Authorization: `Bearer ${fresh_access_token}`,
                     'Content-Type': 'application/json',
                 },
             }
         );
+        leadData.messagethreadId = response.data.threadId;
 
-        return response.data;
-    } catch (error) {
-        console.error('Failed to reply:', error.response?.data || error.message);
-        // throw new Error('Reply failed');
+        //emailflow data 
+        leadData.emailStatus = 'sent'
+        leadData.save()
+        return {
+            ...state,
+            stage: "intial_email_sent",
+        };
+    } catch (err) {
+        console.error('sendMail error:', err.response?.data || err.message);
     }
-}
+};
+
 module.exports = {
-    setAccount, getAccount, getGoogleUserProfile, getLoginLink, authorization, refreshAccessToken, sendMail, replyToMessage
+    setAccount, authorization, getAccount, getGoogleUserProfile, getLoginLink, authorization, refreshAccessToken, sendMail
 }

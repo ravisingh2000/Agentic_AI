@@ -1,6 +1,5 @@
 // models/lead.model.js
 const mongoose = require("mongoose");
-const { unsubscribe } = require("../../v1/routes/accounts/account.route");
 
 const LeadSchema = new mongoose.Schema({
     campaignId: {
@@ -15,7 +14,9 @@ const LeadSchema = new mongoose.Schema({
     },
     company: String,
     role: String,
-
+    graphThreadId: String,
+    messagethreadId: String,
+    messageId: String,
     emailStatus: {
         type: String,
         enum: ['pending', 'sent', 'replied', 'followed_up', 'meeting_scheduled', 'failed'],
