@@ -2,8 +2,15 @@
 const axios = require("axios");
 const Lead = require("../../models/leads/leads.model")
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`;
-
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`;
+const schema = {
+    type: "object",
+    properties: {
+        subject: { type: "string", description: "Email subject line" },
+        body: { type: "string", description: "Email body text, personalized outreach, friendly tone" }
+    },
+    required: ["subject", "body"]
+};
 
 const generateWithGemini = async (prompt, generationConfig = {}) => {
     const res = await axios.post(
@@ -49,14 +56,6 @@ Keep it short, professional, and focus on how we can help them improve their bus
 
 `;
 
-    const schema = {
-        type: "object",
-        properties: {
-            subject: { type: "string", description: "Email subject line" },
-            body: { type: "string", description: "Email body text, personalized outreach, friendly tone" }
-        },
-        required: ["subject", "body"]
-    };
 
     const generationConfig = {
         responseMimeType: "application/json",
@@ -72,14 +71,14 @@ Keep it short, professional, and focus on how we can help them improve their bus
     };
 }
 
-const generateFollowUp = async ({ state }) => {
-    const { lead, lastReply } = state;
-
+const generateFollowUp = async (state) => {
+    const { lead, summary, initialEmail, latest_reply } = state;
+    const leadData = await Lead.findById(lead.id)
     const prompt = `
 You're a helpful SDR writing a reply to a lead.
 
 Last reply from lead:
-"${lastReply}"
+"${latest_reply.body}"
 
 Write a polite, relevant response that:
 - Answers their concern
@@ -87,16 +86,22 @@ Write a polite, relevant response that:
 - Keeps tone warm and human
 
 Use the following lead info:
-- Name: ${lead.name}
-- Role: ${lead.role}
-- Company: ${lead.company}
+- Name: ${leadData.name}
+- Role: ${leadData.role}
+- Company: ${leadData.company}
+- Summary:${summary}
+- initialEmail:${initialEmail.body}
 `;
+    const generationConfig = {
+        responseMimeType: "application/json",
+        responseSchema: schema,
+    };
 
-    const reply = await generateWithGemini(prompt);
-
+    const reply = await generateWithGemini(prompt, generationConfig);
+    const parsedReply = JSON.parse(reply)
     return {
         ...state,
-        followUpEmail: reply,
+        followUpEmail: parsedReply,
         stage: "follow_up_generated",
     };
 }

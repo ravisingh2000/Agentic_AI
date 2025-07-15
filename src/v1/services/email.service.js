@@ -58,6 +58,7 @@ const getLoginLink = async () => {
             'https://www.googleapis.com/auth/gmail.send',
             'https://www.googleapis.com/auth/userinfo.email',
             'https://www.googleapis.com/auth/userinfo.profile',
+            'https://www.googleapis.com/auth/gmail.readonly',
             'openid'
         ].join(' '));
 
@@ -137,14 +138,14 @@ const refreshAccessToken = async ({ accountId, refresh_token }) => {
 //     accessToken, threadId, messageId, references
 // }) => {
 const sendMail = async (state) => {
-    const { lead, campaignId, stage, sendEmail, initialEmail } = state;
+    const { lead, campaignId, stage, followUpEmail, initialEmail } = state;
     const replyTo = null;
     const messageId = null;
     const references = null;
     const leadData = await Lead.findById(lead.id);
     const campaignData = await Campaign.findById(campaignId).populate('senderAccount')
-    const subject = stage == 'intial_email_generated' ? initialEmail.subject : sendEmail?.subject
-    const mainBody = stage == 'intial_email_generated' ? initialEmail.body : sendEmail?.body
+    const subject = stage == 'intial_email_generated' ? initialEmail.subject : followUpEmail?.subject
+    const mainBody = stage == 'intial_email_generated' ? initialEmail.body : followUpEmail?.body
     const fresh_access_token = await refreshAccessToken({ accountId: campaignData.senderAccount._id, refresh_token: campaignData.senderAccount.config.refresh_token });
     try {
         const boundary = 'boundary-example';
@@ -190,7 +191,8 @@ const sendMail = async (state) => {
             }
         );
         leadData.messagethreadId = response.data.threadId;
-
+        leadData.lastMessageId = response.data.id;
+        leadData.messageId = response.data.id;
         //emailflow data 
         leadData.emailStatus = 'sent'
         leadData.save()

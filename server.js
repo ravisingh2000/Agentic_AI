@@ -5,6 +5,7 @@ const port = process.env.PORT || 3000;
 
 const app = require('./src/server/app');
 require('./src/config/db/dbConnect')
+require("./src/config/cron")
 const server = http.createServer(app);
 
 server.listen(port, () => {

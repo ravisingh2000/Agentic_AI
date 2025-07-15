@@ -16,6 +16,7 @@ const LeadSchema = new mongoose.Schema({
     role: String,
     graphThreadId: String,
     messagethreadId: String,
+    lastMessageId: String,
     messageId: String,
     emailStatus: {
         type: String,

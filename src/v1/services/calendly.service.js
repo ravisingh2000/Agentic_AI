@@ -3,9 +3,11 @@ const { sendMail } = require("./email.service");
 const axios = require("axios")
 const Lead = require("../../models/leads/leads.model")
 const Account = require("../../models/accounts/account.model")
-const sendCalendlyLink = async ({ campaign, lead_id, subject = "Invitation for meeting" }) => {
-    const lead = await Lead.findById(lead_id)
-    const account = await Account.findById(campaign.accountId)
+const Campaign = require("../../models/campaign/campaign.model")
+const sendCalendlyLink = async (state) => {
+    const campaign = await Campaign.findById(state.campaignId)
+    const lead = await Lead.findById(state.id)
+    const account = await Account.findById(campaign.senderAccount)
     const bookingTemplate = getBookingTemplate('ravi', campaign._id, lead_id)
     const sendPayload = {
         subject: Lead.emailFlow[0].subject, messageId: Lead.messageId, threadId: lead.threadId, to: lead.email, from: 'raviamptest@gmail.com', text: "", html: bookingTemplate, replyTo: 'raviamptest@gmail.com', accessToken: account.config.access_token
@@ -34,6 +36,10 @@ const sendCalendlyLink = async ({ campaign, lead_id, subject = "Invitation for m
         },
 
     );
+    return {
+        ...state,
+        stage: "calendly_link_sent",
+    };
 
 }
 const calendlyConfimation = async (req, res) => {
@@ -45,7 +51,7 @@ const calendlyConfimation = async (req, res) => {
         const time = req.body.payload.event.start_time;
 
         // 👉 Update your DB / LangGraph state
-        console.log(`📅 Booking confirmed with ${email} at ${time}`);
+        console.log(` Booking confirmed with ${email} at ${time}`);
         const bookingTemplate = getBookingTemplate('ravi', campaign._id, lead_id)
         // Example: update lead in DB
         await db.leads.updateOne(
@@ -110,7 +116,6 @@ const createWebhook = async () => {
         };
 
         const res = await api.post('/webhook_subscriptions', payload);
-        console.log('✅ Webhook created:\n', res.data.resource);
         return res.data.resource.uri; // store this to delete later
     }
     catch (error) {
@@ -122,7 +127,6 @@ const deleteWebhook = async () => {
     try {
         const webhookUri = process.env.WEBHOOK_URL;
         await api.delete(webhookUri);
-        console.log('❌ Webhook deleted:', webhookUri);
     } catch (error) {
         console.error('Failed to delete webhook:', error.response?.data || error.message);
     }

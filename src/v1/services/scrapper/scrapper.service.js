@@ -63,7 +63,7 @@ const extractTextFromFile = async (files) => {
 
 const summarizeCompanyAndDocument = async (state) => {
     const { campaignId, lead, fileData } = state;
-    console.log('🌐 Fetching website data...');
+    console.log(' Fetching website data...');
     const campaign = await Campaign.findById(campaignId)
     const companyText = await extractTextFromWebsite(campaign.companyUrl);
     const promptText = `
@@ -88,7 +88,7 @@ const summarizeCompanyAndDocument = async (state) => {
     campaign.summary = summary;
     campaign.save()
 
-    return { ...state, summary, stage: "company_summary_generated", };
+    return { ...state, summary, stage: "company_summary_generated", latest_reply: null };
 }
 module.exports = {
     summarizeCompanyAndDocument,
