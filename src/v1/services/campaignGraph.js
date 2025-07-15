@@ -4,7 +4,7 @@ const { MongoClient } = require("mongodb");
 const scrapper = require('./scrapper/scrapper.service');
 const { generateColdEmail, generateFollowUp } = require('./aiService');
 const { sendMail } = require('./email.service');
-const replyDecision = require('./replyDescion.service');
+const replyDecision = require('./replyDecision.service');
 const { sendCalendlyLink } = require('./calendly.service');
 const StateAnnotation = Annotation.Root({
     campaignId: Annotation(),
